@@ -1,0 +1,9 @@
+How should I implement the table and use it?
+Just bare copy Instruction Encoding table does not work.
+When I see an instruction I know what operand is the source and what is the destination. How do I take this information into account? I do not like the implicit_d approach because you must use this bit also when the instruction does not have a reg field. Can any instruction be thought of a reg_operand and a reg_mem_operand?
+Immediate to register/memory: it does have a reg_mem_operand but it does not have a reg_operand, you must fake the immediate as the reg_operand and use a implicit_d = 0. 
+I mean you can live with that but I do not think is super clean to understand. I would prefer having an implicit_d only when I actually have a reg_operand.
+But how do I get the order when two operand are involved and none of that is a reg_operand?
+Bake the info about the direction in the instruction table explicitly! No implicit_d! When there is a d bit I will do stuff with the d bit, when there is no d bit the instruction must store the info on which of the operand is the source and which is the destination operand.
+Make a struct that is the operand, it contains an identifier, a value and a 
+
