@@ -41,8 +41,8 @@ pop sp
 pop di
 pop si
 pop ds
-xchg ax, [bp-1000]
-xchg bp, [bx+50]
+xchg word ax, [bp-1000]
+xchg word bp, [bx+50]
 xchg ax, ax
 xchg ax, dx
 xchg ax, sp
@@ -57,24 +57,24 @@ in ax, dx
 out 44, ax
 out dx, al
 xlat 
-lea ax, [bx+di+1420]
-lea bx, [bp-50]
-lea sp, [bp-1003]
-lea di, [bx+si-7]
-lds ax, [bx+di+1420]
-lds bx, [bp-50]
-lds sp, [bp-1003]
-lds di, [bx+si-7]
-les ax, [bx+di+1420]
-les bx, [bp-50]
-les sp, [bp-1003]
-les di, [bx+si-7]
+lea word ax, [bx+di+1420]
+lea word bx, [bp-50]
+lea word sp, [bp-1003]
+lea word di, [bx+si-7]
+lds word ax, [bx+di+1420]
+lds word bx, [bp-50]
+lds word sp, [bp-1003]
+lds word di, [bx+si-7]
+les word ax, [bx+di+1420]
+les word bx, [bp-50]
+les word sp, [bp-1003]
+les word di, [bx+si-7]
 lahf 
 sahf 
 pushf 
 popf 
-add cx, [bp+0]
-add dx, [bx+si]
+add word cx, [bp+0]
+add word dx, [bx+si]
 add byte [bp+di+5000], ah
 add byte [bx], al
 add sp, +392
@@ -84,8 +84,8 @@ add ah, +30
 add al, +9
 add cx, bx
 add ch, al
-adc cx, [bp+0]
-adc dx, [bx+si]
+adc word cx, [bp+0]
+adc word dx, [bx+si]
 adc byte [bp+di+5000], ah
 adc byte [bx], al
 adc sp, +392
@@ -110,8 +110,8 @@ inc word [9349]
 inc byte [bp+0]
 aaa 
 daa 
-sub cx, [bp+0]
-sub dx, [bx+si]
+sub word cx, [bp+0]
+sub word dx, [bx+si]
 sub byte [bp+di+5000], ah
 sub byte [bx], al
 sub sp, +392
@@ -121,8 +121,8 @@ sub ah, +30
 sub al, +9
 sub cx, bx
 sub ch, al
-sbb cx, [bp+0]
-sbb dx, [bx+si]
+sbb word cx, [bp+0]
+sbb word dx, [bx+si]
 sbb byte [bp+di+5000], ah
 sbb byte [bx], al
 sbb sp, +392
@@ -159,7 +159,7 @@ neg word [bp+di-10044]
 neg word [9349]
 neg byte [bp+0]
 cmp bx, cx
-cmp dh, [bp+390]
+cmp byte dh, [bp+390]
 cmp word [bp+2], si
 cmp bl, +20
 cmp byte [bx], +34

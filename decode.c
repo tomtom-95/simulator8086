@@ -137,8 +137,6 @@ struct Instruction instruction_decode(u8 **memory)
                     }
                     case 0b11:
                     {
-                        // NOTE
-                        // I do not know if I like being "clever" with the wideness instead of being explicit
                         strlcpy(operand -> str, reg_field_enc[instruction.fields[FIELD_ID_RM].value][(operand -> wideness) - 1], 32);
                         break;
                     }
@@ -307,6 +305,7 @@ int main(int argc, char **argv)
         Printing on file
         ----------------
         */
+
         struct Operand source_operand = {OPERAND_ID_NONE, OPERAND_DIRECTION_NONE, OPERAND_WIDENESS_NONE, ""};
         struct Operand destination_operand = {OPERAND_ID_NONE, OPERAND_DIRECTION_NONE, OPERAND_WIDENESS_NONE, ""};
         for (size_t i = 0; i < 2; ++i)
@@ -319,95 +318,32 @@ int main(int argc, char **argv)
             {
                 destination_operand = instruction.operands[i];
             }
+        }
+        instruction.operands[SOURCE - 1] = source_operand;
+        instruction.operands[DESTINATION - 1] = destination_operand;
 
+        for (size_t i = 0; i < 2; ++i)
+        {
             if (instruction.operands[i].id == OPERAND_ID_RM || instruction.operands[i].id == OPERAND_ID_ADDRESS)
             {
                 struct Field field_mod = instruction.fields[FIELD_ID_MOD];
                 if ((field_mod.id == FIELD_ID_NONE) || (field_mod.id == FIELD_ID_MOD && field_mod.value != 0b11))
                 {
                     char tmp[32] = "";
-                    strlcpy(tmp, destination_operand.str, 32);
-                    (instruction.operands[i].wideness == BYTE_WIDE) ? (strlcpy(destination_operand.str, "byte ", 32)):
-                                                                      (strlcpy(destination_operand.str, "word ", 32));
-                    strlcat(destination_operand.str, tmp, 32);
+                    strlcpy(tmp, instruction.operands[DESTINATION - 1].str, 32);
+                    (instruction.operands[i].wideness == BYTE_WIDE) ? (strlcpy(instruction.operands[DESTINATION - 1].str, "byte ", 32)):
+                                                                      (strlcpy(instruction.operands[DESTINATION - 1].str, "word ", 32));
+                    strlcat(instruction.operands[DESTINATION - 1].str, tmp, 32);
                 }
             }
         }
-
-        if (source_operand.id != OPERAND_ID_NONE && destination_operand.id != OPERAND_ID_NONE)
+        if (instruction.operands[DESTINATION - 1].id != OPERAND_ID_NONE && instruction.operands[SOURCE - 1].id != OPERAND_ID_NONE)
         {
-            strlcat(destination_operand.str, ", ", 32);
+            strlcat(instruction.operands[DESTINATION - 1].str, ", ", 32);
         }
-
-        fprintf(fp, "%s %s%s\n", instruction.mnemonic_str, destination_operand.str, source_operand.str);
-
-        instruction.operands[DESTINATION] = destination_operand;
-        instruction.operands[SOURCE] = source_operand;
-
-        /*
-        --------
-        Simulate
-        --------
-        */
-
-        u16 source_operand_value = get_operand_value(instruction, DESTINATION);
-        u16 destination_operand_value = get_operand_value(instruction, SOURCE);
-
-        //u16 source_operand
-        //for (size_t i = 0; i < 2; ++i)
-        //{
-        //    switch (instruction.operands[i].id)
-        //    {
-        //        case OPERAND_ID_NONE:
-        //            break;
-        //        case OPERAND_ID_REG:
-        //            instruction.fields[FIELD_ID_REG].
-        //            break;
-        //    }
-        //}
-        //u16 source_value = source_operand.
-        //switch (instruction.mnemonic_id)
-        //{
-        //    case MOV:
-        //    {
-        //        // use source_operand.id to get the type of operand and based on that get the value
-        //        // it may be an immediate, or a generalregister
-        //        // for the immediate I just want to store the content in a variable
-        //        source_operand.id
-        //        break;
-        //    }
-        //}
-        //instruction
-        // must have register where to put the result of the simulation
-        // when I decode I have destination operand that is an accumulator
-
-
-
+        fprintf(fp, "%s %s%s\n", instruction.mnemonic_str, instruction.operands[DESTINATION - 1].str, instruction.operands[SOURCE - 1].str);
     } // while (memory != file_end_p)
     fclose(fp);
 
     return 0;
-}
-
-// TODO: NEW PLAN
-// at decoding time the operand stores the value in another field
-u16 get_operand_value(struct Instruction instruction, enum OperandDirection dir)
-{
-    u16 operand_value = 0;
-    switch (instruction.operands[dir].id)
-    {
-        case OPERAND_ID_NONE:
-        {
-            break;
-        }
-        case OPERAND_ID_REG:
-        {
-            operand_value = GeneralRegistersforSimulation[instruction.operands[dir].wideness * instruction.fields[FIELD_ID_REG].value];
-            break;
-        }
-        case OPERAND_ID_ACCUMULATOR:
-        {
-            operand_value = instruction.operands[dir].
-        }
-    }
 }
