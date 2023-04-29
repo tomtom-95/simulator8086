@@ -7,7 +7,7 @@
 #include "simulate.h"
 
 
-struct Instruction instruction_decode(u8 **memory)
+struct Instruction instruction_decode(u8 **memory, size_t *count)
 {
     struct Instruction
     instruction = {MNEMONIC_ID_NONE, "", {FIELD_ID_NONE, 0, 0}, {{OPERAND_ID_NONE}, {OPERAND_ID_NONE}}};
@@ -95,18 +95,14 @@ struct Instruction instruction_decode(u8 **memory)
             case OPERAND_ID_REG:
             {
                 u8 reg_field_value = instruction.fields[FIELD_ID_REG].value;
-                u8 reg_index[2];
-                memcpy(reg_index, reg_field_enc[reg_field_value][wideness - 1], sizeof(reg_index));
+                u8 reg_name = reg_field_enc[reg_field_value][wideness - 1][0];
                 strlcpy(operand -> str, reg_field_str[reg_field_value][wideness - 1], 32);
 
                 if (instruction.fields[FIELD_ID_D].id == FIELD_ID_D)
                 {
                     (instruction.fields[FIELD_ID_D].value == 0) ? (operand -> dir = SOURCE) : (operand -> dir = DESTINATION);
                 }
-
-                (wideness == BYTE_WIDE) ?
-                    (operand -> value = (GeneralRegisters[reg_index[0]] & (0x00ff << (8 * reg_index[1])))):
-                    (operand -> value = GeneralRegisters[reg_index[0]]);
+                operand -> value = GeneralRegisters[reg_name];
 
                 break;
             }
@@ -114,12 +110,12 @@ struct Instruction instruction_decode(u8 **memory)
             {
                 if (instruction.fields[FIELD_ID_D].id == FIELD_ID_D)
                 {
-                    (instruction.fields[FIELD_ID_D].value == 0) ?
-                        (operand -> dir = DESTINATION):
-                        (operand -> dir = SOURCE);
+                    (instruction.fields[FIELD_ID_D].value == 0) ? (operand -> dir = DESTINATION) : (operand -> dir = SOURCE);
                 }
 
                 u8 rm_field_value = instruction.fields[FIELD_ID_RM].value;
+                u8 base_name = rm_field_enc[rm_field_value][0];
+                u8 index_name = rm_field_enc[rm_field_value][1];
                 switch (instruction.fields[FIELD_ID_MOD].value)
                 {
                     case 0b00:
@@ -134,35 +130,32 @@ struct Instruction instruction_decode(u8 **memory)
                         else
                         {
                             snprintf(operand -> str, 32, "[%s]", rm_field_str[rm_field_value]);
+                            // TODO: this does not consider the override segment prefix case
+                            operand -> value = SegmentRegisters[REGISTER_DS] + GeneralRegisters[base_name] + GeneralRegisters[index_name];
                         }
-
                         break;
                     }
                     case 0b01:
                     {
                         snprintf(operand -> str, 32, "[%s%+hhi]", rm_field_str[rm_field_value], (s8)(**memory));
+                        operand -> value = SegmentRegisters[REGISTER_DS] + GeneralRegisters[base_name] + GeneralRegisters[index_name] + (s16)(**memory);
                         *memory += 1;
-
                         break;
                     }
                     case 0b10:
                     {
                         s16 displacement = (s16)(((s16)(**memory)) | ((s16)(*(*memory + 1) << 8)));
                         snprintf(operand -> str, 32, "[%s%+hi]", rm_field_str[rm_field_value], displacement);
+                        operand -> value = SegmentRegisters[REGISTER_DS] + GeneralRegisters[base_name] + GeneralRegisters[index_name] + displacement;
                         *memory += 2;
 
                         break;
                     }
                     case 0b11:
                     {
-                        u8 reg_index[2];
-                        memcpy(reg_index, reg_field_enc[rm_field_value][(operand -> wideness) - 1], sizeof(reg_index));
+                        u8 reg_name = reg_field_enc[rm_field_value][(operand -> wideness) - 1][0];
                         strlcpy(operand -> str, reg_field_str[rm_field_value][(operand -> wideness) - 1], 32);
-
-                        (operand -> wideness == BYTE_WIDE) ?
-                            (operand -> value = GeneralRegisters[reg_index[0]] & (0x00ff << (8 * reg_index[1]))):
-                            (operand -> value = GeneralRegisters[reg_index[0]]);
-
+                        operand -> value = GeneralRegisters[reg_name];
                         break;
                     }
                 } // switch (instruction.fields[MOD_FIELD_ID].value)
@@ -218,6 +211,7 @@ struct Instruction instruction_decode(u8 **memory)
             case OPERAND_ID_ACCUMULATOR:
             {
                 strlcpy(operand -> str, reg_field_str[0][(operand -> wideness) - 1], 32);
+                operand -> value = GeneralRegisters[REGISTER_AX];
                 break;
             }
             case OPERAND_ID_ADDRESS:
@@ -225,6 +219,7 @@ struct Instruction instruction_decode(u8 **memory)
                 if (operand -> wideness == BYTE_WIDE)  
                 {
                     snprintf(operand -> str, 32, "[%hhu]", **memory);
+                    operand -> value = 
                     *memory += 1;
                 }
                 else
@@ -285,21 +280,27 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    size_t file_len = fread(memory, 1, MB(1), fd);
+    SegmentRegisters[REGISTER_CS] = 0x00080;
+    SegmentRegisters[REGISTER_DS] = SegmentRegisters[REGISTER_CS] + KB(64);
+    SegmentRegisters[REGISTER_SS] = SegmentRegisters[REGISTER_DS] + KB(64);
+    SegmentRegisters[REGISTER_ES] = SegmentRegisters[REGISTER_SS] + KB(64);
+
+    StackPointer = KB(64) - 1;
+    InstructionPointer = 0;
+
+    size_t file_len = fread(memory[SegmentRegisters[REGISTER_CS]], 1, KB(64), fd);
     if (ferror(fd) != 0)
     {
         printf("Error: cannot read the file\n");
         return 1;
     }
-    /* NOTE: in reality I want way less than ((1024 * 1024) - 1) bytes occupied by code! */
+
     if (feof(fd) == 0)
     {
-        printf("Error: file too big, it does not fit entirely into memory\n");
+        printf("Error: file too big, it does not fit entirely into the code segment\n");
         return 1;
     }
     fclose(fd);
-
-    u8 *file_end_p = memory + file_len;
 
     FILE *fp = fopen("result.asm", "w");
     if (fp == NULL)
@@ -309,24 +310,20 @@ int main(int argc, char **argv)
     }
     fprintf(fp, "%s", "bits 16\n\n"); 
 
-    while (memory != file_end_p)
+    u16 count = file_len;
+    while (count)
     {
-        if (memory > file_end_p)
-        {
-            printf("Error: read beyond the file boundary\n");
-            return 1;
-        }
-
         //struct Prefix prefixes[PREFIX_ID_COUNT] = {PREFIX_ID_NONE, "", 0};
-        struct Instruction instruction = instruction_decode(&memory);
+        struct Instruction instruction = instruction_decode(memory, &count);
         if (instruction.mnemonic_id == MNEMONIC_ID_NONE)
         {
             printf("Error: instruction not read\n");
             return 1;
         }
-        if (memory > file_end_p)
+
+        if (count < 0)
         {
-            printf("Error: memory outside of boundary\n");
+            printf("Error: read beyond the file boundary\n");
             return 1;
         }
 
@@ -388,22 +385,22 @@ int main(int argc, char **argv)
                 if (dest_operand.id == OPERAND_ID_REG)
                 {
                     u8 reg_field_value = instruction.fields[FIELD_ID_REG].value;
-                    u8 reg_index[2];
-                    memcpy(reg_index, reg_field_enc[reg_field_value][wideness - 1], sizeof(reg_index));
+                    u8 reg_name = reg_field_enc[reg_field_value][wideness - 1][0];
+                    u8 reg_offset = reg_field_enc[reg_field_value][wideness - 1][1];
 
                     (wideness == BYTE_WIDE) ?
-                        (GeneralRegisters[reg_index[0]] = (GeneralRegisters[reg_index[0]] & (0xff00 >> (8 * reg_index[1]))) | instruction.operands[SOURCE - 1].value):
-                        (GeneralRegisters[reg_index[0]] = instruction.operands[SOURCE - 1].value);
+                        (GeneralRegisters[reg_name] = (GeneralRegisters[reg_name] & (0xff00 >> (8 * reg_offset))) | instruction.operands[SOURCE - 1].value):
+                        (GeneralRegisters[reg_name] = instruction.operands[SOURCE - 1].value);
                 }
                 else if (dest_operand.id == OPERAND_ID_RM && instruction.fields[FIELD_ID_MOD].value == 0b11)
                 {
                     u8 rm_field_value = instruction.fields[FIELD_ID_RM].value;
-                    u8 rm_index[2];
-                    memcpy(rm_index, reg_field_enc[rm_field_value][wideness - 1], sizeof(rm_index));
+                    u8 rm_name = reg_field_enc[rm_field_value][wideness - 1][0];
+                    u8 rm_offset = reg_field_enc[rm_field_value][wideness - 1][1];
 
                     (wideness == BYTE_WIDE) ?
-                        (GeneralRegisters[rm_index[0]] = (GeneralRegisters[rm_index[0]] & (0xff00 >> (8 * rm_index[1]))) | instruction.operands[SOURCE - 1].value):
-                        (GeneralRegisters[rm_index[0]] = instruction.operands[SOURCE - 1].value);
+                        (GeneralRegisters[rm_name] = (GeneralRegisters[rm_name] & (0xff00 >> (8 * rm_offset))) | instruction.operands[SOURCE - 1].value):
+                        (GeneralRegisters[rm_name] = instruction.operands[SOURCE - 1].value);
                 }
                 else if (dest_operand.id == OPERAND_ID_RM)
                 {

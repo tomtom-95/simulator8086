@@ -194,6 +194,6 @@ char *sr_field_enc[] = {
 #define PREFIX(prefix_id, prefix_str, opcode) {prefix_id, #prefix_str, 0b##opcode}
 #define INST(mnemonic_id, mnemonic_str, ...) {mnemonic_id, #mnemonic_str, __VA_ARGS__}
 
-struct Instruction instruction_decode(u8 **memory);
+struct Instruction instruction_decode(u8 **memory, size_t *count);
 
 #endif // DECODE_H

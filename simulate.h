@@ -1,5 +1,13 @@
 #include "decode.h"
 
+struct SegmentRegisters
+{
+    u8 *register_cs;
+    u8 *register_ds;
+    u8 *register_ss;
+    u8 *register_es;
+};
+
 enum GeneralRegisterName
 {
     REGISTER_NONE,
@@ -44,6 +52,7 @@ enum FlagName
 u16 GeneralRegisters[GENERAL_REGISTER_COUNT];
 u16 SegmentRegisters[SEGMENT_REGISTER_COUNT];
 u16 InstructionPointer;
+u16 StackPointer;
 u16 Flags[FLAG_COUNT];
 
 enum ByteOffset
@@ -52,10 +61,6 @@ enum ByteOffset
     HIGH_BYTE,
 };
 
-// NOTE: a better name could be reg_field_enc
-// because it is exactly the info in the reg_field_enc array!
-// I can substitute that array of string with this
-// I need to add a translation between GeneralRegister and string name
 u8 reg_field_enc[][2][2] = {
     {{REGISTER_AX, LOW_BYTE}, {REGISTER_AX}},
     {{REGISTER_CX, LOW_BYTE}, {REGISTER_CX}},
