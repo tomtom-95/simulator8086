@@ -55,6 +55,7 @@ struct Operand
     enum OperandDirection dir;
     enum OperandWideness wideness;
     char str[32];
+    u16 value;
 };
 
 enum MnemonicId
@@ -166,28 +167,6 @@ struct Prefix
     enum PrefixId prefix_id;
     char prefix_str[8];
     u8 prefix_value;
-};
-
-char *reg_field_enc[][2] = {
-    {"al", "ax"},
-    {"cl", "cx"},
-    {"dl", "dx"},
-    {"bl", "bx"},
-    {"ah", "sp"},
-    {"ch", "bp"},
-    {"dh", "si"},
-    {"bh", "di"},
-};
-
-char *rm_field_enc[] = {
-    "bx+si",
-    "bx+di",
-    "bp+si",
-    "bp+di",
-    "si",
-    "di",
-    "bp",
-    "bx",
 };
 
 char *sr_field_enc[] = {

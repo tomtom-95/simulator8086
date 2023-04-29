@@ -17,7 +17,7 @@ struct Instruction instruction_decode(u8 **memory)
         u8 field_offset = 0;
 
         size_t j = 0;
-        while (instruction_table[i].fields[j].id != FIELD_ID_END)
+        for (;;)
         {
             struct Field field = instruction_table[i].fields[j];
 
@@ -44,23 +44,26 @@ struct Instruction instruction_decode(u8 **memory)
                 instruction.fields[field.id].value = (((*tmp_memory) >> (8 - field.len - field_offset)) & mask); 
             }
 
+            if (field.id == FIELD_ID_END)
+            {
+                instruction.mnemonic_id = instruction_table[i].mnemonic_id;
+                strlcpy(instruction.mnemonic_str, instruction_table[i].mnemonic_str, 8);
+                memcpy(instruction.operands, instruction_table[i].operands, sizeof(instruction.operands));
+                *memory = tmp_memory;
+                break;
+            }
+
             field_offset += field.len;
             if (field_offset == 8)
             {
                 tmp_memory += 1;
                 field_offset = 0; 
             }
-            j++;
+            ++j;
         } /* while (instruction_table[i].fields[j].id != FIELD_ID_END) */
 
-        if (instruction_table[i].fields[j].id == FIELD_ID_END)
+        if (instruction.mnemonic_id != MNEMONIC_ID_NONE)
         {
-            instruction.mnemonic_id = instruction_table[i].mnemonic_id;
-            strlcpy(instruction.mnemonic_str, instruction_table[i].mnemonic_str, 8);
-            instruction.fields[FIELD_ID_END] = instruction_table[i].fields[j];
-            instruction.operands[0] = instruction_table[i].operands[0];
-            instruction.operands[1] = instruction_table[i].operands[1];
-            *memory = tmp_memory;
             break;
         }
     } /* for (size_t i = 0; i < ArrayCount(instruction_table); ++i) */
@@ -81,6 +84,8 @@ struct Instruction instruction_decode(u8 **memory)
             (instruction.fields[FIELD_ID_W].value == 0) ? (operand -> wideness = BYTE_WIDE) : (operand -> wideness = WORD_WIDE); 
         }
 
+        u8 wideness = operand -> wideness;
+
         switch (operand -> id)
         {
             case OPERAND_ID_NONE:
@@ -89,55 +94,75 @@ struct Instruction instruction_decode(u8 **memory)
             }
             case OPERAND_ID_REG:
             {
+                u8 reg_field_value = instruction.fields[FIELD_ID_REG].value;
+                u8 reg_index[2];
+                memcpy(reg_index, reg_field_enc[reg_field_value][wideness - 1], sizeof(reg_index));
+                strlcpy(operand -> str, reg_field_str[reg_field_value][wideness - 1], 32);
+
                 if (instruction.fields[FIELD_ID_D].id == FIELD_ID_D)
                 {
                     (instruction.fields[FIELD_ID_D].value == 0) ? (operand -> dir = SOURCE) : (operand -> dir = DESTINATION);
                 }
 
-                u8 reg_field_value = instruction.fields[FIELD_ID_REG].value;
-                (operand -> wideness == BYTE_WIDE) ? strlcpy(operand -> str, reg_field_enc[reg_field_value][0], 32):
-                                                     strlcpy(operand -> str, reg_field_enc[reg_field_value][1], 32);
+                (wideness == BYTE_WIDE) ?
+                    (operand -> value = (GeneralRegisters[reg_index[0]] & (0x00ff << (8 * reg_index[1])))):
+                    (operand -> value = GeneralRegisters[reg_index[0]]);
+
                 break;
             }
             case OPERAND_ID_RM:
             {
                 if (instruction.fields[FIELD_ID_D].id == FIELD_ID_D)
                 {
-                    (instruction.fields[FIELD_ID_D].value == 0) ? (operand -> dir = DESTINATION) : (operand -> dir = SOURCE);
+                    (instruction.fields[FIELD_ID_D].value == 0) ?
+                        (operand -> dir = DESTINATION):
+                        (operand -> dir = SOURCE);
                 }
 
+                u8 rm_field_value = instruction.fields[FIELD_ID_RM].value;
                 switch (instruction.fields[FIELD_ID_MOD].value)
                 {
                     case 0b00:
                     {
-                        if (instruction.fields[FIELD_ID_RM].value == 0b110)
+                        if (rm_field_value == 0b110)
                         {
                             u16 direct_address = (u16)(((u16)(**memory)) | ((u16)(*(*memory + 1) << 8)));
                             snprintf(operand -> str, 32, "[%hu]", direct_address);
+                            operand -> value = direct_address;
                             *memory += 2;
                         }
                         else
                         {
-                            snprintf(operand -> str, 32, "[%s]", rm_field_enc[instruction.fields[FIELD_ID_RM].value]);
+                            snprintf(operand -> str, 32, "[%s]", rm_field_str[rm_field_value]);
                         }
+
                         break;
                     }
                     case 0b01:
                     {
-                        snprintf(operand -> str, 32, "[%s%+hhi]", rm_field_enc[instruction.fields[FIELD_ID_RM].value], (s8)(**memory));
+                        snprintf(operand -> str, 32, "[%s%+hhi]", rm_field_str[rm_field_value], (s8)(**memory));
                         *memory += 1;
+
                         break;
                     }
                     case 0b10:
                     {
                         s16 displacement = (s16)(((s16)(**memory)) | ((s16)(*(*memory + 1) << 8)));
-                        snprintf(operand -> str, 32, "[%s%+hi]", rm_field_enc[instruction.fields[FIELD_ID_RM].value], displacement);
+                        snprintf(operand -> str, 32, "[%s%+hi]", rm_field_str[rm_field_value], displacement);
                         *memory += 2;
+
                         break;
                     }
                     case 0b11:
                     {
-                        strlcpy(operand -> str, reg_field_enc[instruction.fields[FIELD_ID_RM].value][(operand -> wideness) - 1], 32);
+                        u8 reg_index[2];
+                        memcpy(reg_index, reg_field_enc[rm_field_value][(operand -> wideness) - 1], sizeof(reg_index));
+                        strlcpy(operand -> str, reg_field_str[rm_field_value][(operand -> wideness) - 1], 32);
+
+                        (operand -> wideness == BYTE_WIDE) ?
+                            (operand -> value = GeneralRegisters[reg_index[0]] & (0x00ff << (8 * reg_index[1]))):
+                            (operand -> value = GeneralRegisters[reg_index[0]]);
+
                         break;
                     }
                 } // switch (instruction.fields[MOD_FIELD_ID].value)
@@ -150,12 +175,14 @@ struct Instruction instruction_decode(u8 **memory)
                     if (instruction.fields[FIELD_ID_S].value == 0 && operand -> wideness == BYTE_WIDE)
                     {
                         snprintf(operand -> str, 32, "%+hhi", (s8)(**memory));
+                        operand -> value = (s8)(**memory);
                         *memory += 1;
                     }
                     else if (instruction.fields[FIELD_ID_S].value == 0 && operand -> wideness == WORD_WIDE)
                     {
                         s16 immediate = (s16)((**memory) | ((*(*memory + 1)) << 8));
                         snprintf(operand -> str, 32, "%+hi", immediate);
+                        operand -> value = immediate;
                         *memory += 2;
                     }
                     else if (instruction.fields[FIELD_ID_S].value == 1 && operand -> wideness == BYTE_WIDE)
@@ -166,6 +193,7 @@ struct Instruction instruction_decode(u8 **memory)
                     {
                         // sign extension
                         snprintf(operand -> str, 32, "%+hi", (s16)(**memory));
+                        operand -> value = (s16)(**memory);
                         *memory += 1;
                     }
                 } // if (instruction.fields[SR_FIELD_ID].id == SR_FIELD_ID)
@@ -174,12 +202,14 @@ struct Instruction instruction_decode(u8 **memory)
                     if (operand -> wideness == BYTE_WIDE)
                     {
                         snprintf(operand -> str, 32, "%+hhi", (s8)(**memory));
+                        operand -> value = (s8)(**memory);
                         *memory += 1;
                     }
                     else
                     {
                         s16 immediate = (s16)((u16)**memory) | (((u16)(*(*memory + 1))) << 8);
                         snprintf(operand -> str, 32, "%+hi", immediate);
+                        operand -> value = immediate;
                         *memory += 2;
                     }
                 }
@@ -187,7 +217,7 @@ struct Instruction instruction_decode(u8 **memory)
             }
             case OPERAND_ID_ACCUMULATOR:
             {
-                strlcpy(operand -> str, reg_field_enc[0][(operand -> wideness) - 1], 32);
+                strlcpy(operand -> str, reg_field_str[0][(operand -> wideness) - 1], 32);
                 break;
             }
             case OPERAND_ID_ADDRESS:
@@ -287,7 +317,7 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        struct Prefix prefixes[PREFIX_ID_COUNT] = {PREFIX_ID_NONE, "", 0};
+        //struct Prefix prefixes[PREFIX_ID_COUNT] = {PREFIX_ID_NONE, "", 0};
         struct Instruction instruction = instruction_decode(&memory);
         if (instruction.mnemonic_id == MNEMONIC_ID_NONE)
         {
@@ -342,6 +372,47 @@ int main(int argc, char **argv)
             strlcat(instruction.operands[DESTINATION - 1].str, ", ", 32);
         }
         fprintf(fp, "%s %s%s\n", instruction.mnemonic_str, instruction.operands[DESTINATION - 1].str, instruction.operands[SOURCE - 1].str);
+
+        /*
+        ----------
+        Simulation
+        ----------
+        */
+
+        switch (instruction.mnemonic_id)
+        {
+            case MOV:
+            {
+                struct Operand dest_operand = instruction.operands[DESTINATION - 1];
+                u8 wideness = dest_operand.wideness;
+                if (dest_operand.id == OPERAND_ID_REG)
+                {
+                    u8 reg_field_value = instruction.fields[FIELD_ID_REG].value;
+                    u8 reg_index[2];
+                    memcpy(reg_index, reg_field_enc[reg_field_value][wideness - 1], sizeof(reg_index));
+
+                    (wideness == BYTE_WIDE) ?
+                        (GeneralRegisters[reg_index[0]] = (GeneralRegisters[reg_index[0]] & (0xff00 >> (8 * reg_index[1]))) | instruction.operands[SOURCE - 1].value):
+                        (GeneralRegisters[reg_index[0]] = instruction.operands[SOURCE - 1].value);
+                }
+                else if (dest_operand.id == OPERAND_ID_RM && instruction.fields[FIELD_ID_MOD].value == 0b11)
+                {
+                    u8 rm_field_value = instruction.fields[FIELD_ID_RM].value;
+                    u8 rm_index[2];
+                    memcpy(rm_index, reg_field_enc[rm_field_value][wideness - 1], sizeof(rm_index));
+
+                    (wideness == BYTE_WIDE) ?
+                        (GeneralRegisters[rm_index[0]] = (GeneralRegisters[rm_index[0]] & (0xff00 >> (8 * rm_index[1]))) | instruction.operands[SOURCE - 1].value):
+                        (GeneralRegisters[rm_index[0]] = instruction.operands[SOURCE - 1].value);
+                }
+                else if (dest_operand.id == OPERAND_ID_RM)
+                {
+                    printf("TODO\n");
+                }
+                break;
+            }
+        } // switch (instruction.mnemonic_id)
+
     } // while (memory != file_end_p)
     fclose(fp);
 
