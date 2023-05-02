@@ -25,18 +25,18 @@ int main(int argc, char **argv)
         printf("Error: cannot allocate memory\n");
         return 1;
     }
-    general_registers = memory + MB(1);
-    segment_registers = (u16 *)(general_registers + 2 * GENERAL_REGISTER_COUNT);
+    general_registers_start = memory + MB(1);
+    segment_registers_start = (u16 *)general_registers_start + GENERAL_REGISTER_COUNT;
 
-    segment_registers[REGISTER_CS] = 0x0008;
-    segment_registers[REGISTER_DS] = 0x1008; 
-    segment_registers[REGISTER_SS] = 0x2008;
-    segment_registers[REGISTER_ES] = 0x3008;
+    segment_registers_start[REGISTER_CS] = 0x0008;
+    segment_registers_start[REGISTER_DS] = 0x1008; 
+    segment_registers_start[REGISTER_SS] = 0x2008;
+    segment_registers_start[REGISTER_ES] = 0x3008;
 
     InstructionPointer = 0;
     StackPointer = KB(64) - 1;
 
-    size_t file_len = fread(memory + (((u32)segment_registers[REGISTER_CS]) << 4) + InstructionPointer, 1, KB(64), fd);
+    size_t file_len = fread(memory + (((u32)segment_registers_start[REGISTER_CS]) << 4) + InstructionPointer, 1, KB(64), fd);
     if (ferror(fd) != 0)
     {
         printf("Error: cannot read the file\n");
@@ -123,6 +123,9 @@ int main(int argc, char **argv)
         {
             case MOV:
             {
+                (field_w_value == 0) ?
+                    (*(destination_operand -> location) = *(source_operand -> location)):
+                    (*((u16 *)(destination_operand -> location)) = *((u16 *)(source_operand -> location)));
                 break;
             }
         }

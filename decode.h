@@ -85,28 +85,28 @@ enum GeneralRegisterName
     GENERAL_REGISTER_COUNT,
 };
 
-u8 *general_registers;
+u8 *general_registers_start;
 
 u8 reg_field_encoding[8][2] = {
-    {2 * REGISTER_AX,     2 * REGISTER_AX},
-    {2 * REGISTER_CX,     2 * REGISTER_CX},
-    {2 * REGISTER_DX,     2 * REGISTER_DX},
-    {2 * REGISTER_BX,     2 * REGISTER_BX},
-    {2 * REGISTER_AX + 1, 2 * REGISTER_SP},
-    {2 * REGISTER_CX + 1, 2 * REGISTER_BP},
-    {2 * REGISTER_DX + 1, 2 * REGISTER_SI},
-    {2 * REGISTER_BX + 1, 2 * REGISTER_DI},
+    {REGISTER_AX,     REGISTER_AX},
+    {REGISTER_CX,     REGISTER_CX},
+    {REGISTER_DX,     REGISTER_DX},
+    {REGISTER_BX,     REGISTER_BX},
+    {REGISTER_AX + 1, REGISTER_SP},
+    {REGISTER_CX + 1, REGISTER_BP},
+    {REGISTER_DX + 1, REGISTER_SI},
+    {REGISTER_BX + 1, REGISTER_DI},
 };
 
 u8 rm_field_encoding[8][2] = {
-    {2 * REGISTER_BX, 2 * REGISTER_SI},
-    {2 * REGISTER_BX, 2 * REGISTER_DI},
-    {2 * REGISTER_BP, 2 * REGISTER_SI},
-    {2 * REGISTER_BP, 2 * REGISTER_DI},
-    {2 * REGISTER_SI, 2 * REGISTER_ZERO},
-    {2 * REGISTER_DI, 2 * REGISTER_ZERO},
-    {2 * REGISTER_BP, 2 * REGISTER_ZERO},
-    {2 * REGISTER_BX, 2 * REGISTER_ZERO},
+    {REGISTER_BX, REGISTER_SI},
+    {REGISTER_BX, REGISTER_DI},
+    {REGISTER_BP, REGISTER_SI},
+    {REGISTER_BP, REGISTER_DI},
+    {REGISTER_SI, REGISTER_ZERO},
+    {REGISTER_DI, REGISTER_ZERO},
+    {REGISTER_BP, REGISTER_ZERO},
+    {REGISTER_BX, REGISTER_ZERO},
 };
 
 
@@ -153,7 +153,7 @@ enum SegmentRegisterName
     SEGMENT_REGISTER_COUNT,
 };
 
-u16 *segment_registers;
+u16 *segment_registers_start;
 
 char *sr_field_str[] = {
     "es",
