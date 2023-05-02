@@ -9,7 +9,7 @@
             "request": "launch",
             "name": "Debug",
             "program": "${workspaceFolder}/${fileBasenameNoExtension}",
-            "args": ["${workspaceFolder}/part1/listing_0044_register_movs"],
+            "args": ["${workspaceFolder}/listing_0045_challenge_register_movs"],
             "cwd": "${workspaceFolder}"
         }
     ]
