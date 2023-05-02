@@ -111,7 +111,16 @@ struct Instruction instruction_decode(u8 *memory)
 
                 u8 field_reg_value = instruction.fields[FIELD_ID_REG].value;
                 strlcpy(operand -> str, reg_field_str[field_reg_value][field_w_value], 32);
-                operand -> location = general_registers_start + reg_field_encoding[field_reg_value][field_w_value];
+                if (field_w_value == 0)
+                {
+                    (field_reg_value < 0b100) ?
+                        (operand -> location = general_registers_start + 2 * reg_field_encoding[field_reg_value][field_w_value]):
+                        (operand -> location = general_registers_start + 2 * reg_field_encoding[field_reg_value][field_w_value] + 1);
+                }
+                else
+                {
+                    operand -> location = general_registers_start + 2 * reg_field_encoding[field_reg_value][field_w_value];
+                }
                 break;
             }
             case OPERAND_ID_RM:
@@ -157,7 +166,16 @@ struct Instruction instruction_decode(u8 *memory)
                     case 0b11:
                     {
                         strlcpy(operand -> str, reg_field_str[field_rm_value][field_w_value], 32);
-                        operand -> location = general_registers_start + reg_field_encoding[field_rm_value][field_w_value];
+                        if (field_w_value == 0)
+                        {
+                            (field_rm_value < 0b100) ?
+                                (operand -> location = general_registers_start + 2 * reg_field_encoding[field_rm_value][field_w_value]):
+                                (operand -> location = general_registers_start + 2 * reg_field_encoding[field_rm_value][field_w_value] + 1);
+                        }
+                        else
+                        {
+                            operand -> location = general_registers_start + 2 * reg_field_encoding[field_rm_value][field_w_value];
+                        }
                         break;
                     }
                 } // switch (instruction.fields[MOD_FIELD_ID].value)

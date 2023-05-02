@@ -74,13 +74,14 @@ int main(int argc, char **argv)
             return 1;
         }
 
+        u8 field_w_value = instruction.fields[FIELD_ID_W].value;
+
         /*
         ----------------
         Printing on file
         ----------------
         */
 
-        u8 field_w_value = instruction.fields[FIELD_ID_W].value;
         
         struct Operand *source_operand;
         struct Operand *destination_operand;
@@ -119,6 +120,15 @@ int main(int argc, char **argv)
         ----------
         */
 
+        printf("%s\n", "before instruction:");
+        printf("ax: %x\n", *((u16 *)general_registers_start + REGISTER_AX));
+        printf("bx: %x\n", *((u16 *)general_registers_start + REGISTER_BX));
+        printf("cx: %x\n", *((u16 *)general_registers_start + REGISTER_CX));
+        printf("dx: %x\n", *((u16 *)general_registers_start + REGISTER_DX));
+        printf("sp: %x\n", *((u16 *)general_registers_start + REGISTER_SP));
+        printf("bp: %x\n", *((u16 *)general_registers_start + REGISTER_BP));
+        printf("si: %x\n", *((u16 *)general_registers_start + REGISTER_SI));
+        printf("di: %x\n", *((u16 *)general_registers_start + REGISTER_DI));
         switch (instruction.mnemonic_id)
         {
             case MOV:
@@ -128,7 +138,31 @@ int main(int argc, char **argv)
                     (*((u16 *)(destination_operand -> location)) = *((u16 *)(source_operand -> location)));
                 break;
             }
+            case ADD:
+            {
+                (field_w_value == 0) ?
+                    (*(destination_operand -> location) = *(source_operand -> location) + *(destination_operand -> location)):
+                    (*((u16 *)(destination_operand -> location)) = *(u16 *)(source_operand -> location) + (*(u16 *)(destination_operand -> location)));
+                break;
+            }
+            case SUB:
+                (field_w_value == 0) ?
+                    (*(destination_operand -> location) = *(destination_operand -> location) - (*(source_operand -> location))):
+                    (*((u16 *)(destination_operand -> location)) = (*(u16 *)(destination_operand -> location)) - (*(u16 *)(source_operand -> location)));
+                break;
         }
+        printf("%s\n", "after instruction:");
+        printf("ax: %x\n", *((u16 *)general_registers_start + REGISTER_AX));
+        printf("bx: %x\n", *((u16 *)general_registers_start + REGISTER_BX));
+        printf("cx: %x\n", *((u16 *)general_registers_start + REGISTER_CX));
+        printf("dx: %x\n", *((u16 *)general_registers_start + REGISTER_DX));
+        printf("sp: %x\n", *((u16 *)general_registers_start + REGISTER_SP));
+        printf("bp: %x\n", *((u16 *)general_registers_start + REGISTER_BP));
+        printf("si: %x\n", *((u16 *)general_registers_start + REGISTER_SI));
+        printf("di: %x\n", *((u16 *)general_registers_start + REGISTER_DI));
+        printf("\n");
+
+
     } // while (memory != file_end_p)
     fclose(fp);
 

@@ -88,14 +88,14 @@ enum GeneralRegisterName
 u8 *general_registers_start;
 
 u8 reg_field_encoding[8][2] = {
-    {REGISTER_AX,     REGISTER_AX},
-    {REGISTER_CX,     REGISTER_CX},
-    {REGISTER_DX,     REGISTER_DX},
-    {REGISTER_BX,     REGISTER_BX},
-    {REGISTER_AX + 1, REGISTER_SP},
-    {REGISTER_CX + 1, REGISTER_BP},
-    {REGISTER_DX + 1, REGISTER_SI},
-    {REGISTER_BX + 1, REGISTER_DI},
+    {REGISTER_AX, REGISTER_AX},
+    {REGISTER_CX, REGISTER_CX},
+    {REGISTER_DX, REGISTER_DX},
+    {REGISTER_BX, REGISTER_BX},
+    {REGISTER_AX, REGISTER_SP},
+    {REGISTER_CX, REGISTER_BP},
+    {REGISTER_DX, REGISTER_SI},
+    {REGISTER_BX, REGISTER_DI},
 };
 
 u8 rm_field_encoding[8][2] = {
