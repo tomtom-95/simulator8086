@@ -5,9 +5,10 @@
 #include "decode.h"
 #include "instruction_table.h"
 
+// TODO: prefix decoding
 struct Instruction instruction_decode(u8 *memory)
 {
-    struct Instruction instruction = {MNEMONIC_ID_NONE, "", {FIELD_ID_NONE}, {{OPERAND_ID_NONE}, {OPERAND_ID_NONE}}};
+    struct Instruction instruction = {MNEMONIC_ID_NONE, "", {FIELD_ID_NONE}, {OPERAND_ID_NONE}, {OPERAND_ID_NONE}};
 
     u32 code_segment_base_address = ((u32)(segment_registers_start[REGISTER_CS])) << 4;
     u32 data_segment_base_address = ((u32)(segment_registers_start[REGISTER_DS])) << 4;
@@ -52,7 +53,24 @@ struct Instruction instruction_decode(u8 *memory)
             {
                 instruction.mnemonic_id = instruction_table[i].mnemonic_id;
                 strlcpy(instruction.mnemonic_str, instruction_table[i].mnemonic_str, 8);
-                memcpy(&instruction.operands, &instruction_table[i].operands, sizeof(instruction.operands));
+                if (instruction.fields[FIELD_ID_D].id == FIELD_ID_D)
+                {
+                    if (instruction.fields[FIELD_ID_D].value == 0)
+                    {
+                        instruction.destination_operand.id = OPERAND_ID_RM;
+                        instruction.source_operand.id = OPERAND_ID_REG;
+                    }
+                    else
+                    {
+                        instruction.destination_operand.id = OPERAND_ID_REG;
+                        instruction.source_operand.id = OPERAND_ID_RM;
+                    }
+                }
+                else
+                {
+                    instruction.destination_operand = instruction_table[i].destination_operand;
+                    instruction.source_operand = instruction_table[i].source_operand;
+                }
                 InstructionPointer = tmp_memory - (memory + code_segment_base_address);
                 break;
             }
@@ -79,9 +97,10 @@ struct Instruction instruction_decode(u8 *memory)
     --------------------------------
     */
 
+    struct Operand *operands[2] = {&instruction.destination_operand, &instruction.source_operand};
     for (size_t i = 0; i < 2; ++i)
     {
-        struct Operand *operand = &instruction.operands[i];
+        struct Operand *operand = operands[i];
 
         u8 field_w_value = instruction.fields[FIELD_ID_W].value;
         u8 *next_instruction_byte = memory + code_segment_base_address + InstructionPointer;
@@ -94,23 +113,8 @@ struct Instruction instruction_decode(u8 *memory)
             }
             case OPERAND_ID_REG:
             {
-                if (instruction.fields[FIELD_ID_D].id == FIELD_ID_D)
-                {
-                    u8 field_d_value = instruction.fields[FIELD_ID_D].value;
-                    if (field_d_value == 0)
-                    {
-                        operand -> dir = SOURCE;
-                        instruction.operands[i^1].dir = DESTINATION;
-                    }
-                    else
-                    {
-                        operand -> dir = DESTINATION;
-                        instruction.operands[i^1].dir = SOURCE;
-                    }
-                }
-
                 u8 field_reg_value = instruction.fields[FIELD_ID_REG].value;
-                strlcpy(operand -> str, reg_field_str[field_reg_value][field_w_value], 32);
+                strlcpy(operand -> decoding, reg_field_str[field_reg_value][field_w_value], 32);
                 if (field_w_value == 0)
                 {
                     (field_reg_value < 0b100) ?
@@ -136,13 +140,13 @@ struct Instruction instruction_decode(u8 *memory)
                         if (field_rm_value == 0b110)
                         {
                             u16 direct_address = *((u16 *)next_instruction_byte);
-                            snprintf(operand -> str, 32, "[%hu]", direct_address);
+                            snprintf(operand -> decoding, 32, "[%hu]", direct_address);
                             operand -> location = memory + data_segment_base_address + direct_address;
                             InstructionPointer += 2;
                         }
                         else
                         {
-                            snprintf(operand -> str, 32, "[%s]", rm_field_str[field_rm_value]);
+                            snprintf(operand -> decoding, 32, "[%s]", rm_field_str[field_rm_value]);
                             operand -> location = memory + data_segment_base_address + *(offset_base_register) + *(offset_index_register);
                         }
                         break;
@@ -150,7 +154,7 @@ struct Instruction instruction_decode(u8 *memory)
                     case 0b01:
                     {
                         s8 displacement = *next_instruction_byte;
-                        snprintf(operand -> str, 32, "[%s%+hhi]", rm_field_str[field_rm_value], displacement);
+                        snprintf(operand -> decoding, 32, "[%s%+hhi]", rm_field_str[field_rm_value], displacement);
                         operand -> location = memory + data_segment_base_address + *offset_base_register + *offset_index_register + displacement; 
                         InstructionPointer += 1;
                         break;
@@ -158,14 +162,14 @@ struct Instruction instruction_decode(u8 *memory)
                     case 0b10:
                     {
                         s16 displacement = *((u16 *)next_instruction_byte);
-                        snprintf(operand -> str, 32, "[%s%+hi]", rm_field_str[field_rm_value], displacement);
+                        snprintf(operand -> decoding, 32, "[%s%+hi]", rm_field_str[field_rm_value], displacement);
                         operand -> location = memory + data_segment_base_address + *offset_base_register + *offset_index_register + displacement;
                         InstructionPointer += 2;
                         break;
                     }
                     case 0b11:
                     {
-                        strlcpy(operand -> str, reg_field_str[field_rm_value][field_w_value], 32);
+                        strlcpy(operand -> decoding, reg_field_str[field_rm_value][field_w_value], 32);
                         if (field_w_value == 0)
                         {
                             (field_rm_value < 0b100) ?
@@ -186,14 +190,14 @@ struct Instruction instruction_decode(u8 *memory)
                 if (instruction.fields[FIELD_ID_S].id == FIELD_ID_S && instruction.fields[FIELD_ID_S].value == 1 && field_w_value == 1)
                 {
                     // sign extension
-                    snprintf(operand -> str, 32, "%+hi", (s16)(*next_instruction_byte));
+                    snprintf(operand -> decoding, 32, "%+hi", (s16)(*next_instruction_byte));
                     InstructionPointer += 1;
                 }
                 else
                 {
                     (field_w_value == 0) ?
-                        snprintf(operand -> str, 32, "%+hhi", (s8)(*next_instruction_byte)):
-                        snprintf(operand -> str, 32, "%+hi", *((s16 *)next_instruction_byte));
+                        snprintf(operand -> decoding, 32, "%+hhi", (s8)(*next_instruction_byte)):
+                        snprintf(operand -> decoding, 32, "%+hi", *((s16 *)next_instruction_byte));
 
                     InstructionPointer += field_w_value + 1;
                 }
@@ -202,15 +206,15 @@ struct Instruction instruction_decode(u8 *memory)
             }
             case OPERAND_ID_ACCUMULATOR:
             {
-                strlcpy(operand -> str, reg_field_str[0][field_w_value], 32);
+                strlcpy(operand -> decoding, reg_field_str[0][field_w_value], 32);
                 operand -> location = (u8 *)((u16 *)general_registers_start + REGISTER_AX);
                 break;
             }
             case OPERAND_ID_ADDRESS:
             {
                 (field_w_value == 0) ?
-                    snprintf(operand -> str, 32, "[%hhu]", *next_instruction_byte):
-                    snprintf(operand -> str, 32, "[%hu]", *((u16 *)(next_instruction_byte)));
+                    snprintf(operand -> decoding, 32, "[%hhu]", *next_instruction_byte):
+                    snprintf(operand -> decoding, 32, "[%hu]", *((u16 *)(next_instruction_byte)));
 
                 InstructionPointer += field_w_value + 1;
                 operand -> location = next_instruction_byte;
@@ -219,27 +223,27 @@ struct Instruction instruction_decode(u8 *memory)
             case OPERAND_ID_SR:
             {
                 u8 field_sr_value = instruction.fields[FIELD_ID_SR].value;
-                snprintf(operand -> str, 32, "%s", sr_field_str[field_sr_value]);
+                snprintf(operand -> decoding, 32, "%s", sr_field_str[field_sr_value]);
                 operand -> location = (u8 *)((u16 *)segment_registers_start + field_sr_value);
                 break;
             }
             case OPERAND_ID_IPINC8:
             {
-                snprintf(operand -> str, 32, "$%+hhi+2", (s8)(*next_instruction_byte));
+                snprintf(operand -> decoding, 32, "$%+hhi+2", (s8)(*next_instruction_byte));
                 operand -> location = next_instruction_byte;
                 InstructionPointer += 1;
                 break;
             }
             case OPERAND_ID_DATA8:
             {
-                snprintf(operand -> str, 32, "%hhi", (s8)(*next_instruction_byte));
+                snprintf(operand -> decoding, 32, "%hhu", *next_instruction_byte);
                 operand -> location = next_instruction_byte;
                 InstructionPointer += 1;
                 break;
             }
             case OPERAND_ID_DX:
             {
-                snprintf(operand -> str, 32, "%s", "dx");
+                snprintf(operand -> decoding, 32, "%s", "dx");
                 operand -> location = (u8 *)((u16 *)general_registers_start + REGISTER_DX);
                 break;
             }

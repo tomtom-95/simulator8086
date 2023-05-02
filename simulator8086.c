@@ -19,7 +19,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    u8 *memory = malloc((MB(1) + 2 * GENERAL_REGISTER_COUNT + 2 * SEGMENT_REGISTER_COUNT) * sizeof(*memory));
+    u8 *memory = malloc((MB(1) + 2 * GENERAL_REGISTER_COUNT + 2 * SEGMENT_REGISTER_COUNT + 2) * sizeof(*memory));
     if (memory == NULL)
     {
         printf("Error: cannot allocate memory\n");
@@ -27,11 +27,13 @@ int main(int argc, char **argv)
     }
     general_registers_start = memory + MB(1);
     segment_registers_start = (u16 *)general_registers_start + GENERAL_REGISTER_COUNT;
+    flags_start = segment_registers_start + SEGMENT_REGISTER_COUNT;
 
     segment_registers_start[REGISTER_CS] = 0x0008;
     segment_registers_start[REGISTER_DS] = 0x1008; 
     segment_registers_start[REGISTER_SS] = 0x2008;
     segment_registers_start[REGISTER_ES] = 0x3008;
+
 
     InstructionPointer = 0;
     StackPointer = KB(64) - 1;
@@ -60,7 +62,6 @@ int main(int argc, char **argv)
 
     while (InstructionPointer != file_len)
     {
-        //struct Prefix prefixes[PREFIX_ID_COUNT] = {PREFIX_ID_NONE, "", 0};
         struct Instruction instruction = instruction_decode(memory);
         if (instruction.mnemonic_id == MNEMONIC_ID_NONE)
         {
@@ -82,37 +83,25 @@ int main(int argc, char **argv)
         ----------------
         */
 
-        
-        struct Operand *source_operand;
-        struct Operand *destination_operand;
-        if (instruction.operands[0].dir == DESTINATION)
-        {
-            destination_operand = &instruction.operands[0];
-            source_operand = &instruction.operands[1];
-        }
-        else
-        {
-            destination_operand = &instruction.operands[1];
-            source_operand = &instruction.operands[0];
-        }
-
+        struct Operand *operands[2] = {&instruction.destination_operand, &instruction.source_operand};
         for (size_t i = 0; i < 2; ++i)
         {
-            if ((instruction.operands[i].id == OPERAND_ID_RM || instruction.operands[i].id == OPERAND_ID_ADDRESS))
+            if ((operands[i] -> id == OPERAND_ID_RM || operands[i] -> id == OPERAND_ID_ADDRESS))
             {
                 struct Field field_mod = instruction.fields[FIELD_ID_MOD];
                 if ((field_mod.id == FIELD_ID_NONE) || (field_mod.id == FIELD_ID_MOD && field_mod.value != 0b11))
                 {
-                    (field_w_value == 0) ? (strlcat(instruction.mnemonic_str, " byte ", 16)):
-                                           (strlcat(instruction.mnemonic_str, " word ", 16));
+                    (field_w_value == 0) ?
+                        (strlcat(instruction.mnemonic_str, " byte ", 16)):
+                        (strlcat(instruction.mnemonic_str, " word ", 16));
                 }
             }
         }
-        if (instruction.operands[0].id != OPERAND_ID_NONE && instruction.operands[1].id != OPERAND_ID_NONE)
+        if (operands[0] -> id != OPERAND_ID_NONE && operands[1] -> id != OPERAND_ID_NONE)
         {
-            strlcat(destination_operand -> str, ", ", 32);
+            strlcat(instruction.destination_operand.decoding, ", ", 32);
         }
-        fprintf(fp, "%s %s%s\n", instruction.mnemonic_str, destination_operand -> str, source_operand -> str);
+        fprintf(fp, "%s %s%s\n", instruction.mnemonic_str, operands[0] -> decoding, operands[1] -> decoding);
 
         /*
         ----------
@@ -129,28 +118,34 @@ int main(int argc, char **argv)
         printf("bp: %x\n", *((u16 *)general_registers_start + REGISTER_BP));
         printf("si: %x\n", *((u16 *)general_registers_start + REGISTER_SI));
         printf("di: %x\n", *((u16 *)general_registers_start + REGISTER_DI));
+
         switch (instruction.mnemonic_id)
         {
             case MOV:
             {
-                (field_w_value == 0) ?
-                    (*(destination_operand -> location) = *(source_operand -> location)):
-                    (*((u16 *)(destination_operand -> location)) = *((u16 *)(source_operand -> location)));
+                memcpy(operands[0] -> location, operands[1] -> location, field_w_value + 1);
                 break;
             }
             case ADD:
             {
-                (field_w_value == 0) ?
-                    (*(destination_operand -> location) = *(source_operand -> location) + *(destination_operand -> location)):
-                    (*((u16 *)(destination_operand -> location)) = *(u16 *)(source_operand -> location) + (*(u16 *)(destination_operand -> location)));
+                u16 add = (*((u16 *)(operands[0] -> location))) + (*((u16 *)(operands[1] -> location)));
+                memcpy(operands[0] -> location, &add, field_w_value + 1);
+                ((*(operands[0] -> location) == 0) && (*((operands[0] -> location) + field_w_value) == 0)) ?
+                    (BitSet(*flags_start, FLAG_ZF)):
+                    (BitClear(*flags_start, FLAG_ZF));
                 break;
             }
             case SUB:
-                (field_w_value == 0) ?
-                    (*(destination_operand -> location) = *(destination_operand -> location) - (*(source_operand -> location))):
-                    (*((u16 *)(destination_operand -> location)) = (*(u16 *)(destination_operand -> location)) - (*(u16 *)(source_operand -> location)));
+            {
+                u16 sub = (*((u16 *)(operands[0] -> location))) - (*((u16 *)(operands[1] -> location)));
+                memcpy(operands[0] -> location, &sub, field_w_value + 1);
+                ((*(operands[0] -> location) == 0) && (*((operands[0] -> location) + field_w_value) == 0)) ?
+                    (BitSet(*flags_start, FLAG_ZF)):
+                    (BitClear(*flags_start, FLAG_ZF));
                 break;
+            }
         }
+
         printf("%s\n", "after instruction:");
         printf("ax: %x\n", *((u16 *)general_registers_start + REGISTER_AX));
         printf("bx: %x\n", *((u16 *)general_registers_start + REGISTER_BX));
@@ -160,8 +155,8 @@ int main(int argc, char **argv)
         printf("bp: %x\n", *((u16 *)general_registers_start + REGISTER_BP));
         printf("si: %x\n", *((u16 *)general_registers_start + REGISTER_SI));
         printf("di: %x\n", *((u16 *)general_registers_start + REGISTER_DI));
-        printf("\n");
-
+        printf("%s\n", "flag register:");
+        printf("%x\n", *flags_start);
 
     } // while (memory != file_end_p)
     fclose(fp);

@@ -7,6 +7,8 @@
 #define MB(num) (1024 * KB(num))
 
 #define ArrayCount(Array) (sizeof(Array) / sizeof(Array[0]))
+#define BitSet(a, b) ((a) |= (1ULL<<(b)))
+#define BitClear(a, b) ((a) &= ~(1ULL<<(b)))
 
 typedef u_int8_t u8;
 typedef u_int16_t u16;
@@ -110,17 +112,6 @@ u8 rm_field_encoding[8][2] = {
 };
 
 
-char *general_registers_names[] = {
-    "ax",
-    "bx",
-    "cx",
-    "dx",
-    "sp",
-    "bp",
-    "si",
-    "di",
-};
-
 char *reg_field_str[][2] = {
     {"al", "ax"},
     {"cl", "cx"},
@@ -177,7 +168,7 @@ enum FlagName
 
     FLAG_COUNT,
 };
-u16 Flags;
+u16 *flags_start;
 
 u16 InstructionPointer;
 u16 StackPointer;
@@ -226,17 +217,10 @@ enum OperandId
     OPERAND_ID_DX,
 };
 
-enum OperandDirection
-{
-    DESTINATION,
-    SOURCE,
-};
-
 struct Operand
 {
     enum OperandId id;
-    enum OperandDirection dir;
-    char str[32];
+    char decoding[32];
     u8 *location;
 };
 
@@ -245,13 +229,8 @@ struct Instruction
     enum MnemonicId mnemonic_id;
     char mnemonic_str[16];
     struct Field fields[FIELD_ID_COUNT]; 
-    struct Operand operands[2];
-};
-
-union DataPointer
-{
-    u8 *memory_pointer;
-    u16 *register_pointer;
+    struct Operand destination_operand;
+    struct Operand source_operand;
 };
 
 enum PrefixId
@@ -271,10 +250,11 @@ enum PrefixId
 
 struct Prefix
 {
-    enum PrefixId prefix_id;
-    char prefix_str[8];
-    u8 prefix_value;
+    enum PrefixId id;
+    char decoding[8];
+    u8 value;
 };
+
 
 #define OPCODE1(bits) {FIELD_ID_OPCODE1, sizeof(#bits) - 1, 0b##bits}
 #define OPCODE2(bits) {FIELD_ID_OPCODE2, sizeof(#bits) - 1, 0b##bits}
