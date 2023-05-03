@@ -181,6 +181,7 @@ enum FieldId
     FIELD_ID_OPCODE2,
     FIELD_ID_S,
     FIELD_ID_W,
+    FIELD_ID_IMPLW,
     FIELD_ID_D,
     FIELD_ID_V,
     FIELD_ID_Z,
@@ -263,7 +264,7 @@ struct Prefix
 #define W {FIELD_ID_W, 1}
 #define S {FIELD_ID_S, 1}
 
-#define ImplW(bit) {FIELD_ID_W, 0, bit}
+#define ImplW(bit) {FIELD_ID_IMPLW, 0, bit}
 
 #define MOD {FIELD_ID_MOD, 2}
 #define REG {FIELD_ID_REG, 3}
@@ -276,6 +277,7 @@ struct Prefix
 #define PREFIX(prefix_id, prefix_str, opcode) {prefix_id, #prefix_str, 0b##opcode}
 #define INST(mnemonic_id, mnemonic_str, ...) {mnemonic_id, #mnemonic_str, __VA_ARGS__}
 
-struct Instruction instruction_decode(u8 *memory);
+struct Instruction instruction_fetch(u8 *memory);
+void instruction_decode(u8 *memory, struct Instruction *instruction);
 
 #endif // DECODE_H

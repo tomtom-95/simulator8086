@@ -62,7 +62,9 @@ int main(int argc, char **argv)
 
     while (InstructionPointer != file_len)
     {
-        struct Instruction instruction = instruction_decode(memory);
+        struct Instruction instruction = instruction_fetch(memory);
+        instruction_decode(memory, &instruction);
+
         if (instruction.mnemonic_id == MNEMONIC_ID_NONE)
         {
             printf("Error: instruction not read\n");
@@ -75,7 +77,10 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        u8 field_w_value = instruction.fields[FIELD_ID_W].value;
+        u8 field_w_value;
+        (instruction.fields[FIELD_ID_W].id == FIELD_ID_W) ?
+            (field_w_value = instruction.fields[FIELD_ID_W].value):
+            (field_w_value = instruction.fields[FIELD_ID_IMPLW].value);
 
         /*
         ----------------
@@ -92,8 +97,8 @@ int main(int argc, char **argv)
                 if ((field_mod.id == FIELD_ID_NONE) || (field_mod.id == FIELD_ID_MOD && field_mod.value != 0b11))
                 {
                     (field_w_value == 0) ?
-                        (strlcat(instruction.mnemonic_str, " byte ", 16)):
-                        (strlcat(instruction.mnemonic_str, " word ", 16));
+                        (strlcat(instruction.mnemonic_str, " byte", 16)):
+                        (strlcat(instruction.mnemonic_str, " word", 16));
                 }
             }
         }

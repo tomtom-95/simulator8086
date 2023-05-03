@@ -5,32 +5,33 @@
 #include "decode.h"
 #include "instruction_table.h"
 
-// TODO: prefix decoding
-struct Instruction instruction_decode(u8 *memory)
+struct Instruction instruction_fetch(u8 *memory)
 {
-    struct Instruction instruction = {MNEMONIC_ID_NONE, "", {FIELD_ID_NONE}, {OPERAND_ID_NONE}, {OPERAND_ID_NONE}};
-
     u32 code_segment_base_address = ((u32)(segment_registers_start[REGISTER_CS])) << 4;
-    u32 data_segment_base_address = ((u32)(segment_registers_start[REGISTER_DS])) << 4;
 
+    struct Instruction none_instruction = {MNEMONIC_ID_NONE, "", {FIELD_ID_NONE}, {OPERAND_ID_NONE}, {OPERAND_ID_NONE}};
+    u8 fetching_completed = 0;
+
+    struct Instruction instruction;
     for (size_t i = 0; i < ArrayCount(instruction_table); ++i)
     {
-        u8 *tmp_memory = memory + code_segment_base_address + InstructionPointer;
-        u8 field_offset = 0;
-        size_t j = 0;
-        for (;;)
+        instruction = none_instruction;
+
+        instruction.mnemonic_id = instruction_table[i].mnemonic_id;
+        strlcpy(instruction.mnemonic_str, instruction_table[i].mnemonic_str, 16);
+        instruction.destination_operand = instruction_table[i].destination_operand;
+        instruction.source_operand = instruction_table[i].source_operand;
+
+        u16 tmp_instruction_pointer = InstructionPointer;
+        u8 offset = 0;
+        for (size_t j = 0; j < ArrayCount(instruction_table[i].fields); ++j)
         {
             struct Field field = instruction_table[i].fields[j];
-
-            u8 mask = 0;
-            for (size_t k = 0; k < field.len; ++k)
-            {
-                mask |= (1 << k);
-            }
-
+            u8 mask = ~((~0) << field.len);
+            u8 instruction_byte = *(memory + code_segment_base_address + tmp_instruction_pointer);
             if (field.id == FIELD_ID_OPCODE1 || field.id == FIELD_ID_OPCODE2)
             {
-                if (((*tmp_memory >> (8 - field.len - field_offset)) & mask) == field.value)
+                if (((instruction_byte >> (8 - field.len - offset)) & mask) == field.value)
                 {
                     instruction.fields[field.id] = field;
                 }
@@ -39,70 +40,83 @@ struct Instruction instruction_decode(u8 *memory)
                     break;
                 }
             }
-            else if (field.len == 0)
+            else if (field.id == FIELD_ID_IMPLW)
             {
                 instruction.fields[field.id] = field;
+            }
+            else if (field.id == FIELD_ID_END)
+            {
+                instruction.fields[field.id] = field;
+                fetching_completed = 1;
+                break;
             }
             else
             {
-                instruction.fields[field.id] = field;
-                instruction.fields[field.id].value = (((*tmp_memory) >> (8 - field.len - field_offset)) & mask); 
+                instruction.fields[field.id].id = field.id;
+                instruction.fields[field.id].len = field.len;
+                instruction.fields[field.id].value = (((instruction_byte) >> (8 - field.len - offset)) & mask);
             }
 
-            if (field.id == FIELD_ID_END)
+            // ugly special case for setting destination and source operand
+            if (instruction.fields[field.id].id == FIELD_ID_D)
             {
-                instruction.mnemonic_id = instruction_table[i].mnemonic_id;
-                strlcpy(instruction.mnemonic_str, instruction_table[i].mnemonic_str, 8);
-                if (instruction.fields[FIELD_ID_D].id == FIELD_ID_D)
+                if (instruction.fields[field.id].value == 0)
                 {
-                    if (instruction.fields[FIELD_ID_D].value == 0)
-                    {
-                        instruction.destination_operand.id = OPERAND_ID_RM;
-                        instruction.source_operand.id = OPERAND_ID_REG;
-                    }
-                    else
-                    {
-                        instruction.destination_operand.id = OPERAND_ID_REG;
-                        instruction.source_operand.id = OPERAND_ID_RM;
-                    }
+                    instruction.destination_operand.id = OPERAND_ID_RM;
+                    instruction.source_operand.id = OPERAND_ID_REG;
                 }
                 else
                 {
-                    instruction.destination_operand = instruction_table[i].destination_operand;
-                    instruction.source_operand = instruction_table[i].source_operand;
+                    instruction.destination_operand.id = OPERAND_ID_REG;
+                    instruction.source_operand.id = OPERAND_ID_RM;
                 }
-                InstructionPointer = tmp_memory - (memory + code_segment_base_address);
-                break;
             }
 
-            field_offset += field.len;
-            if (field_offset == 8)
+            offset += field.len;
+            if (offset == 8)
             {
-                tmp_memory += 1;
-                field_offset = 0; 
+                offset = 0;
+                tmp_instruction_pointer++;
             }
-            ++j;
-        } /* while (instruction_table[i].fields[j].id != FIELD_ID_END) */
+        }
 
-        if (instruction.mnemonic_id != MNEMONIC_ID_NONE)
+        if (fetching_completed == 1)
         {
+            InstructionPointer = tmp_instruction_pointer;
             break;
         }
-    } /* for (size_t i = 0; i < ArrayCount(instruction_table); ++i) */
+        else
+        {
+            continue;
+        }
+    }
 
-    /*
-    --------------------------------
-    Fetching finished
-    From here it's the decoding part
-    --------------------------------
-    */
+    if (fetching_completed == 1)
+    {
+        return instruction;
+    }
+    else
+    {
+        printf("error in fetching\n");
+        exit(EXIT_FAILURE);
+    }
+}
 
-    struct Operand *operands[2] = {&instruction.destination_operand, &instruction.source_operand};
+void instruction_decode(u8 *memory, struct Instruction *instruction)
+{
+    u32 code_segment_base_address = ((u32)(segment_registers_start[REGISTER_CS])) << 4;
+    u32 data_segment_base_address = ((u32)(segment_registers_start[REGISTER_DS])) << 4;
+
+    struct Operand *operands[2] = {&(instruction -> destination_operand), &(instruction -> source_operand)};
     for (size_t i = 0; i < 2; ++i)
     {
         struct Operand *operand = operands[i];
 
-        u8 field_w_value = instruction.fields[FIELD_ID_W].value;
+        u8 field_w_value;
+        (instruction -> fields[FIELD_ID_W].id == FIELD_ID_W) ?
+            (field_w_value = instruction -> fields[FIELD_ID_W].value):
+            (field_w_value = instruction -> fields[FIELD_ID_IMPLW].value);
+
         u8 *next_instruction_byte = memory + code_segment_base_address + InstructionPointer;
 
         switch (operand -> id)
@@ -113,7 +127,7 @@ struct Instruction instruction_decode(u8 *memory)
             }
             case OPERAND_ID_REG:
             {
-                u8 field_reg_value = instruction.fields[FIELD_ID_REG].value;
+                u8 field_reg_value = instruction -> fields[FIELD_ID_REG].value;
                 strlcpy(operand -> decoding, reg_field_str[field_reg_value][field_w_value], 32);
                 if (field_w_value == 0)
                 {
@@ -129,8 +143,8 @@ struct Instruction instruction_decode(u8 *memory)
             }
             case OPERAND_ID_RM:
             {
-                u8 field_rm_value = instruction.fields[FIELD_ID_RM].value;
-                u8 field_mod_value = instruction.fields[FIELD_ID_MOD].value;
+                u8 field_rm_value = instruction -> fields[FIELD_ID_RM].value;
+                u8 field_mod_value = instruction -> fields[FIELD_ID_MOD].value;
                 u8 *offset_base_register = (u8 *)((u16 *)general_registers_start + rm_field_encoding[field_rm_value][0]);
                 u8 *offset_index_register = (u8 *)((u16 *)general_registers_start + rm_field_encoding[field_rm_value][1]);
                 switch (field_mod_value)
@@ -187,7 +201,7 @@ struct Instruction instruction_decode(u8 *memory)
             }
             case OPERAND_ID_IMMEDIATE:
             {
-                if (instruction.fields[FIELD_ID_S].id == FIELD_ID_S && instruction.fields[FIELD_ID_S].value == 1 && field_w_value == 1)
+                if (instruction -> fields[FIELD_ID_S].id == FIELD_ID_S && instruction -> fields[FIELD_ID_S].value == 1 && field_w_value == 1)
                 {
                     // sign extension
                     snprintf(operand -> decoding, 32, "%+hi", (s16)(*next_instruction_byte));
@@ -222,7 +236,7 @@ struct Instruction instruction_decode(u8 *memory)
             }
             case OPERAND_ID_SR:
             {
-                u8 field_sr_value = instruction.fields[FIELD_ID_SR].value;
+                u8 field_sr_value = instruction -> fields[FIELD_ID_SR].value;
                 snprintf(operand -> decoding, 32, "%s", sr_field_str[field_sr_value]);
                 operand -> location = (u8 *)((u16 *)segment_registers_start + field_sr_value);
                 break;
@@ -250,5 +264,5 @@ struct Instruction instruction_decode(u8 *memory)
         }
     }
 
-    return instruction;
+    return;
 }
