@@ -256,6 +256,13 @@ struct Prefix
     u8 value;
 };
 
+struct PrefixContest
+{
+    enum PrefixId prefix_id_rep;
+    enum PrefixId prefix_id_lock;
+    enum PrefixId prefix_id_segment_override;
+};
+
 
 #define OPCODE1(bits) {FIELD_ID_OPCODE1, sizeof(#bits) - 1, 0b##bits}
 #define OPCODE2(bits) {FIELD_ID_OPCODE2, sizeof(#bits) - 1, 0b##bits}
@@ -277,7 +284,7 @@ struct Prefix
 #define PREFIX(prefix_id, prefix_str, opcode) {prefix_id, #prefix_str, 0b##opcode}
 #define INST(mnemonic_id, mnemonic_str, ...) {mnemonic_id, #mnemonic_str, __VA_ARGS__}
 
-struct Instruction instruction_fetch(u8 *memory);
+struct Instruction instruction_fetch(u8 *memory, struct PrefixContest *prefix_contest);
 void instruction_decode(u8 *memory, struct Instruction *instruction);
 
 #endif // DECODE_H

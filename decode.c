@@ -5,9 +5,51 @@
 #include "decode.h"
 #include "instruction_table.h"
 
-struct Instruction instruction_fetch(u8 *memory)
+struct Instruction instruction_fetch(u8 *memory, struct PrefixContest *prefix_contest)
 {
     u32 code_segment_base_address = ((u32)(segment_registers_start[REGISTER_CS])) << 4;
+
+    for (;;)
+    {
+        u8 is_prefix = 0;
+        for (size_t i = 0; i < ArrayCount(prefix_table); ++i)
+        {
+            if (*(memory + code_segment_base_address + InstructionPointer) == prefix_table[i].value)
+            {
+                switch (prefix_table[i].id)
+                {
+                    case PREFIX_ID_REP:
+                    case PREFIX_ID_REPNE:
+                    {
+                        prefix_contest -> prefix_id_rep = prefix_table[i].id;
+                        break;
+                    }
+                    case PREFIX_ID_LOCK:
+                    {
+                        prefix_contest -> prefix_id_lock = prefix_table[i].id;
+                        break;
+                    }
+                    case PREFIX_ID_SEGMENT_ES:
+                    case PREFIX_ID_SEGMENT_CS:
+                    case PREFIX_ID_SEGMENT_DS:
+                    case PREFIX_ID_SEGMENT_SS:
+                    {
+                        prefix_contest -> prefix_id_segment_override = prefix_table[i].id;
+                        break;
+                    }
+                }
+
+                InstructionPointer++;
+                is_prefix = 1;
+                break;
+            }
+        }
+
+        if (is_prefix == 0)
+        {
+            break;
+        }
+    }
 
     struct Instruction none_instruction = {MNEMONIC_ID_NONE, "", {FIELD_ID_NONE}, {OPERAND_ID_NONE}, {OPERAND_ID_NONE}};
     u8 fetching_completed = 0;

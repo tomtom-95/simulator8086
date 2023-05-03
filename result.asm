@@ -1,10 +1,7 @@
 bits 16
 
-mov bx, -4093
-mov cx, +3841
-sub bx, cx
-mov sp, +998
-mov bp, +999
-cmp bp, sp
-add bp, +1027
-sub bp, +2026
+lock xchg byte [100], al
+mov byte al, cs:[bx+si]
+mov word bx, ds:[bp+di]
+mov word dx, es:[bp+0]
+mov byte ah, ss:[bx+si+4]

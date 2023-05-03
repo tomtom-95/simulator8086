@@ -62,7 +62,8 @@ int main(int argc, char **argv)
 
     while (InstructionPointer != file_len)
     {
-        struct Instruction instruction = instruction_fetch(memory);
+        struct PrefixContest prefix_contest = {PREFIX_ID_NONE};
+        struct Instruction instruction = instruction_fetch(memory, &prefix_contest);
         instruction_decode(memory, &instruction);
 
         if (instruction.mnemonic_id == MNEMONIC_ID_NONE)
@@ -88,6 +89,17 @@ int main(int argc, char **argv)
         ----------------
         */
 
+        if (prefix_contest.prefix_id_rep != PREFIX_ID_NONE)
+        {
+            fprintf(fp, "%s ", prefix_table[prefix_contest.prefix_id_rep].decoding);
+        }
+        if (prefix_contest.prefix_id_lock != PREFIX_ID_NONE)
+        {
+            fprintf(fp, "%s ", prefix_table[prefix_contest.prefix_id_lock].decoding);
+        }
+
+        // TODO: the logic on printing byte and word is good for nasm but it's a bit ugly (sometimes byte and word are
+        // are printed when not necessary) add some logic for clean a bit the assembly produced
         struct Operand *operands[2] = {&instruction.destination_operand, &instruction.source_operand};
         for (size_t i = 0; i < 2; ++i)
         {
@@ -99,6 +111,13 @@ int main(int argc, char **argv)
                     (field_w_value == 0) ?
                         (strlcat(instruction.mnemonic_str, " byte", 16)):
                         (strlcat(instruction.mnemonic_str, " word", 16));
+                }
+                if (prefix_contest.prefix_id_segment_override != PREFIX_ID_NONE)
+                {
+                    char tmp[32];
+                    strlcpy(tmp, prefix_table[prefix_contest.prefix_id_segment_override].decoding, 32);
+                    strlcat(tmp, operands[i] -> decoding, 32);
+                    strlcpy(operands[i] -> decoding, tmp, 32);
                 }
             }
         }
@@ -126,6 +145,7 @@ int main(int argc, char **argv)
 
         switch (instruction.mnemonic_id)
         {
+            // NOTE: did I really understand how binary operation works?
             case MOV:
             {
                 memcpy(operands[0] -> location, operands[1] -> location, field_w_value + 1);
@@ -135,18 +155,34 @@ int main(int argc, char **argv)
             {
                 u16 add = (*((u16 *)(operands[0] -> location))) + (*((u16 *)(operands[1] -> location)));
                 memcpy(operands[0] -> location, &add, field_w_value + 1);
+                // ZF check
                 ((*(operands[0] -> location) == 0) && (*((operands[0] -> location) + field_w_value) == 0)) ?
                     (BitSet(*flags_start, FLAG_ZF)):
                     (BitClear(*flags_start, FLAG_ZF));
+                // SF check
+                (((*((u8 *)(operands[0] -> location) + field_w_value)) & 0x80) != 0) ? 
+                    (BitSet(*flags_start, FLAG_SF)):
+                    (BitClear(*flags_start, FLAG_SF));
                 break;
             }
             case SUB:
             {
                 u16 sub = (*((u16 *)(operands[0] -> location))) - (*((u16 *)(operands[1] -> location)));
                 memcpy(operands[0] -> location, &sub, field_w_value + 1);
+                // ZF check
                 ((*(operands[0] -> location) == 0) && (*((operands[0] -> location) + field_w_value) == 0)) ?
                     (BitSet(*flags_start, FLAG_ZF)):
                     (BitClear(*flags_start, FLAG_ZF));
+                // SF check
+                (((*((u8 *)(operands[0] -> location) + field_w_value)) & 0x80) != 0) ? 
+                    (BitSet(*flags_start, FLAG_SF)):
+                    (BitClear(*flags_start, FLAG_SF));
+                break;
+            }
+            case CMP:
+            {
+                // TODO
+                u16 sub = (*((u16 *)(operands[0] -> location))) - (*((u16 *)(operands[1] -> location)));
                 break;
             }
         }
